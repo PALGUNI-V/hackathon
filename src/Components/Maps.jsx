@@ -1,37 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, LoadScript, Marker, InfoWindow, DirectionsRenderer } from '@react-google-maps/api';
 
 const containerStyle = {
   width: '100%',
-  height: '600px',
-  maxHeight: '600px',
-  maxWidth: '100%',
+  height: '80vh', // 80% of viewport height
 };
 
-const defaultCenter = {
-  lat: 37.7749,
-  lng: -122.4194,
-};
-
-// Optional test location (Bangalore)
-const testLocation = {
-  lat: 12.9352,
-  lng: 77.6146,
-};
+const defaultCenter = { lat: 40.7128, lng: -74.0060 }; // New York City fallback
+const testLocation = { lat: 40.7128, lng: -74.0060 };
 
 const Maps = () => {
   const [userLocation, setUserLocation] = useState(null);
   const [places, setPlaces] = useState([]);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [error, setError] = useState(null);
+  const [directions, setDirections] = useState(null);
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
   const mapRef = useRef(null);
 
-  // Step 1: Get user's current location
+  // Get user's location
   useEffect(() => {
-    console.log("Attempting to fetch user location...");
-
     if (!navigator.geolocation) {
-      console.log("Geolocation not supported.");
       setError('Geolocation not supported');
       setUserLocation(defaultCenter);
       return;
@@ -40,53 +29,46 @@ const Maps = () => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        console.log("User location fetched:", latitude, longitude);
         setUserLocation({ lat: latitude, lng: longitude });
       },
       (err) => {
-        console.log("Error fetching location:", err.message);
-        setError('Unable to retrieve your location. Using test location.');
+        console.error('Geolocation error:', err);
+        setError('Unable to retrieve your location. Using default location.');
         setUserLocation(testLocation);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
       }
     );
   }, []);
 
-  // Step 2: Fetch both hospitals and pharmacies
+  // Fetch nearby hospitals and pharmacies when userLocation and map are ready
   useEffect(() => {
-    if (!userLocation || !window.google?.maps?.places) return;
-
-    const service = new window.google.maps.places.PlacesService(document.createElement('div'));
+    if (!userLocation || !isMapLoaded || !window.google?.maps?.places) return;
 
     const fetchPlaces = (type) => {
-      return new Promise((resolve) => {
-        const request = {
-          location: new window.google.maps.LatLng(userLocation.lat, userLocation.lng),
-          radius: 5000,
-          type,
-        };
-
-        service.nearbySearch(request, (results, status) => {
-          if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
-            const mappedResults = results.map((place) => ({
-              id: place.place_id,
-              name: place.name,
-              latitude: place.geometry.location.lat(),
-              longitude: place.geometry.location.lng(),
-              address: place.vicinity || place.formatted_address || 'Address not available',
-              specialization: place.types ? place.types.join(', ') : 'Not specified',
-              phone: '',
-              type, // either 'hospital' or 'pharmacy'
-            }));
-            resolve(mappedResults);
-          } else {
-            resolve([]);
+      return new Promise((resolve, reject) => {
+        const service = new window.google.maps.places.PlacesService(document.createElement('div'));
+        service.nearbySearch(
+          {
+            location: userLocation,
+            radius: 5000,
+            type: type,
+          },
+          (results, status) => {
+            if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
+              const formattedResults = results.map(place => ({
+                id: place.place_id,
+                name: place.name,
+                latitude: place.geometry.location.lat(),
+                longitude: place.geometry.location.lng(),
+                address: place.vicinity,
+                type: type,
+                specialization: place.types.join(', '),
+              }));
+              resolve(formattedResults);
+            } else {
+              reject(new Error(`Failed to fetch ${type}s: ${status}`));
+            }
           }
-        });
+        );
       });
     };
 
@@ -99,15 +81,22 @@ const Maps = () => {
         setError('Could not fetch nearby hospitals and pharmacies.');
         setPlaces([]);
       });
-  }, [userLocation]);
+  }, [userLocation, isMapLoaded]);
 
-  // Step 3: Get place details
+  // Fetch detailed info of place and calculate directions
   const fetchPlaceDetails = (placeId, callback) => {
     const service = new window.google.maps.places.PlacesService(document.createElement('div'));
     service.getDetails(
       {
         placeId,
-        fields: ['name', 'formatted_phone_number', 'formatted_address', 'types', 'opening_hours', 'website'],
+        fields: [
+          'name',
+          'formatted_phone_number',
+          'formatted_address',
+          'types',
+          'opening_hours',
+          'website',
+        ],
       },
       (place, status) => {
         if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
@@ -128,30 +117,56 @@ const Maps = () => {
         website: details?.website || '',
       };
       setSelectedPlace(detailedPlace);
+
+      if (userLocation && isMapLoaded) {
+        const directionsService = new window.google.maps.DirectionsService();
+
+        directionsService.route(
+          {
+            origin: userLocation,
+            destination: { lat: detailedPlace.latitude, lng: detailedPlace.longitude },
+            travelMode: window.google.maps.TravelMode.DRIVING,
+          },
+          (result, status) => {
+            if (status === 'OK') {
+              setDirections(result);
+            } else {
+              console.error('Directions request failed due to ' + status);
+              setDirections(null);
+            }
+          }
+        );
+      }
     });
   };
 
+  const handleMapLoad = (map) => {
+    mapRef.current = map;
+    setIsMapLoaded(true);
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center p-4 max-w-screen-sm mx-auto">
-      <h1 className="text-2xl font-semibold mb-4 text-center text-indigo-700">Nearby Hospitals & Pharmacies</h1>
-      {error && <p className="text-red-600 mb-2 text-center">{error}</p>}
-      <div className="w-full shadow-lg rounded-lg overflow-hidden border border-gray-300">
+    <div className="flex flex-col h-screen">
+      <h1 className="text-2xl font-semibold p-4 text-center text-indigo-700">
+        Nearby Hospitals & Pharmacies
+      </h1>
+
+      {error && <p className="text-red-600 px-4 text-center">{error}</p>}
+
+      <div className="flex-grow w-full shadow-lg overflow-hidden border border-gray-300">
         <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY} libraries={['places']}>
           <GoogleMap
             mapContainerStyle={containerStyle}
             center={userLocation || defaultCenter}
             zoom={14}
-            onLoad={(map) => {
-              mapRef.current = map;
-              console.log("Map loaded at:", userLocation || defaultCenter);
-            }}
+            onLoad={handleMapLoad}
             options={{
-              streetViewControl: false,
+              zoomControl: true,
               mapTypeControl: false,
-              fullscreenControl: false,
+              streetViewControl: false,
+              fullscreenControl: true,
             }}
           >
-            {/* User Location Marker */}
             {userLocation && (
               <Marker
                 position={userLocation}
@@ -163,47 +178,98 @@ const Maps = () => {
               />
             )}
 
-            {/* Hospital & Pharmacy Markers */}
             {places.map((place) => (
               <Marker
                 key={place.id}
                 position={{ lat: place.latitude, lng: place.longitude }}
                 onClick={() => handleMarkerClick(place)}
-                title={place.name}
                 icon={{
                   url:
                     place.type === 'hospital'
                       ? 'http://maps.google.com/mapfiles/ms/icons/red-dot.png'
                       : 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
-                  scaledSize: new window.google.maps.Size(40, 40),
+                  scaledSize: new window.google.maps.Size(30, 30),
                 }}
+                title={place.name}
               />
             ))}
 
-            {/* InfoWindow */}
             {selectedPlace && (
               <InfoWindow
                 position={{ lat: selectedPlace.latitude, lng: selectedPlace.longitude }}
-                onCloseClick={() => setSelectedPlace(null)}
+                onCloseClick={() => {
+                  setSelectedPlace(null);
+                  setDirections(null);
+                }}
               >
                 <div className="max-w-xs text-sm">
                   <h2 className="text-lg font-bold text-indigo-800">{selectedPlace.name}</h2>
-                  <p><strong>Type:</strong> {selectedPlace.type.charAt(0).toUpperCase() + selectedPlace.type.slice(1)}</p>
-                  <p><strong>Specialization:</strong> {selectedPlace.specialization}</p>
-                  <p><strong>Address:</strong> {selectedPlace.address}</p>
-                  {selectedPlace.phone && <p><strong>Phone:</strong> {selectedPlace.phone}</p>}
+                  <p>
+                    <strong>Type:</strong>{' '}
+                    {selectedPlace.type.charAt(0).toUpperCase() + selectedPlace.type.slice(1)}
+                  </p>
+                  <p>
+                    <strong>Specialization:</strong> {selectedPlace.specialization}
+                  </p>
+                  <p>
+                    <strong>Address:</strong> {selectedPlace.address}
+                  </p>
+                  {selectedPlace.phone && (
+                    <p>
+                      <strong>Phone:</strong> {selectedPlace.phone}
+                    </p>
+                  )}
                   {selectedPlace.website && (
-                    <p><strong>Website:</strong> <a href={selectedPlace.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{selectedPlace.website}</a></p>
+                    <p>
+                      <strong>Website:</strong>{' '}
+                      <a
+                        href={selectedPlace.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline"
+                      >
+                        {selectedPlace.website}
+                      </a>
+                    </p>
+                  )}
+
+                  {userLocation && (
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${selectedPlace.latitude},${selectedPlace.longitude}&travelmode=driving`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 block w-full bg-indigo-600 text-white py-3 px-4 rounded text-center hover:bg-indigo-700 transition-colors font-bold"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        console.log('Opening directions in Google Maps');
+                      }}
+                    >
+                      📍 Get Directions in Google Maps
+                    </a>
                   )}
                 </div>
               </InfoWindow>
             )}
+
+            {directions && (
+              <DirectionsRenderer
+                directions={directions}
+                options={{
+                  suppressMarkers: true,
+                  polylineOptions: {
+                    strokeColor: '#4F46E5',
+                    strokeWeight: 5,
+                  },
+                }}
+              />
+            )}
           </GoogleMap>
         </LoadScript>
       </div>
-      <p className="mt-4 text-l text-gray-500 text-center">
-        Note: Red markers indicate hospitals, green markers indicate pharmacies.
-      </p>
+
+      <div className="p-2 text-center text-sm text-gray-600 bg-gray-100">
+        <p>🔴 Hospital | 🟢 Pharmacy | 🔵 Your Location</p>
+      </div>
     </div>
   );
 };
