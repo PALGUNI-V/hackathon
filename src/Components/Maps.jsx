@@ -1,12 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleMap, LoadScript, Marker, InfoWindow, DirectionsRenderer } from '@react-google-maps/api';
+import {
+  GoogleMap,
+  LoadScript,
+  Marker,
+  InfoWindow,
+  DirectionsRenderer
+} from '@react-google-maps/api';
+import './Maps.css'; // Import the external CSS
 
 const containerStyle = {
   width: '100%',
-  height: '80vh', // 80% of viewport height
+  height: '80vh'
 };
 
-const defaultCenter = { lat: 40.7128, lng: -74.0060 }; // New York City fallback
+const defaultCenter = { lat: 40.7128, lng: -74.0060 };
 const testLocation = { lat: 40.7128, lng: -74.0060 };
 
 const Maps = () => {
@@ -18,7 +25,6 @@ const Maps = () => {
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const mapRef = useRef(null);
 
-  // Get user's location
   useEffect(() => {
     if (!navigator.geolocation) {
       setError('Geolocation not supported');
@@ -39,7 +45,6 @@ const Maps = () => {
     );
   }, []);
 
-  // Fetch nearby hospitals and pharmacies when userLocation and map are ready
   useEffect(() => {
     if (!userLocation || !isMapLoaded || !window.google?.maps?.places) return;
 
@@ -50,7 +55,7 @@ const Maps = () => {
           {
             location: userLocation,
             radius: 5000,
-            type: type,
+            type: type
           },
           (results, status) => {
             if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
@@ -61,7 +66,7 @@ const Maps = () => {
                 longitude: place.geometry.location.lng(),
                 address: place.vicinity,
                 type: type,
-                specialization: place.types.join(', '),
+                specialization: place.types.join(', ')
               }));
               resolve(formattedResults);
             } else {
@@ -83,7 +88,6 @@ const Maps = () => {
       });
   }, [userLocation, isMapLoaded]);
 
-  // Fetch detailed info of place and calculate directions
   const fetchPlaceDetails = (placeId, callback) => {
     const service = new window.google.maps.places.PlacesService(document.createElement('div'));
     service.getDetails(
@@ -95,8 +99,8 @@ const Maps = () => {
           'formatted_address',
           'types',
           'opening_hours',
-          'website',
-        ],
+          'website'
+        ]
       },
       (place, status) => {
         if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
@@ -114,7 +118,7 @@ const Maps = () => {
         ...place,
         phone: details?.formatted_phone_number || '',
         address: details?.formatted_address || place.address,
-        website: details?.website || '',
+        website: details?.website || ''
       };
       setSelectedPlace(detailedPlace);
 
@@ -125,7 +129,7 @@ const Maps = () => {
           {
             origin: userLocation,
             destination: { lat: detailedPlace.latitude, lng: detailedPlace.longitude },
-            travelMode: window.google.maps.TravelMode.DRIVING,
+            travelMode: window.google.maps.TravelMode.DRIVING
           },
           (result, status) => {
             if (status === 'OK') {
@@ -146,14 +150,14 @@ const Maps = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      <h1 className="text-2xl font-semibold p-4 text-center text-indigo-700">
-        Nearby Hospitals & Pharmacies
-      </h1>
+    <div className="map-page">
+      <div className="map-header">
+        <h1 className="map-title">Nearby Hospitals & Pharmacies</h1>
+        {error && <p className="map-error">{error}</p>}
+      </div>
 
-      {error && <p className="text-red-600 px-4 text-center">{error}</p>}
 
-      <div className="flex-grow w-full shadow-lg overflow-hidden border border-gray-300">
+      <div className="map-container">
         <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY} libraries={['places']}>
           <GoogleMap
             mapContainerStyle={containerStyle}
@@ -164,7 +168,7 @@ const Maps = () => {
               zoomControl: true,
               mapTypeControl: false,
               streetViewControl: false,
-              fullscreenControl: true,
+              fullscreenControl: true
             }}
           >
             {userLocation && (
@@ -172,7 +176,7 @@ const Maps = () => {
                 position={userLocation}
                 icon={{
                   url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-                  scaledSize: new window.google.maps.Size(40, 40),
+                  scaledSize: new window.google.maps.Size(40, 40)
                 }}
                 title="Your Location"
               />
@@ -188,7 +192,7 @@ const Maps = () => {
                     place.type === 'hospital'
                       ? 'http://maps.google.com/mapfiles/ms/icons/red-dot.png'
                       : 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
-                  scaledSize: new window.google.maps.Size(30, 30),
+                  scaledSize: new window.google.maps.Size(30, 30)
                 }}
                 title={place.name}
               />
@@ -202,47 +206,21 @@ const Maps = () => {
                   setDirections(null);
                 }}
               >
-                <div className="max-w-xs text-sm">
-                  <h2 className="text-lg font-bold text-indigo-800">{selectedPlace.name}</h2>
-                  <p>
-                    <strong>Type:</strong>{' '}
-                    {selectedPlace.type.charAt(0).toUpperCase() + selectedPlace.type.slice(1)}
-                  </p>
-                  <p>
-                    <strong>Specialization:</strong> {selectedPlace.specialization}
-                  </p>
-                  <p>
-                    <strong>Address:</strong> {selectedPlace.address}
-                  </p>
-                  {selectedPlace.phone && (
-                    <p>
-                      <strong>Phone:</strong> {selectedPlace.phone}
-                    </p>
-                  )}
+                <div className="info-window">
+                  <h2>{selectedPlace.name}</h2>
+                  <p><strong>Type:</strong> {selectedPlace.type}</p>
+                  <p><strong>Specialization:</strong> {selectedPlace.specialization}</p>
+                  <p><strong>Address:</strong> {selectedPlace.address}</p>
+                  {selectedPlace.phone && <p><strong>Phone:</strong> {selectedPlace.phone}</p>}
                   {selectedPlace.website && (
-                    <p>
-                      <strong>Website:</strong>{' '}
-                      <a
-                        href={selectedPlace.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 underline"
-                      >
-                        {selectedPlace.website}
-                      </a>
-                    </p>
+                    <p><strong>Website:</strong> <a href={selectedPlace.website} target="_blank" rel="noopener noreferrer">{selectedPlace.website}</a></p>
                   )}
-
                   {userLocation && (
                     <a
                       href={`https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${selectedPlace.latitude},${selectedPlace.longitude}&travelmode=driving`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-4 block w-full bg-indigo-600 text-white py-3 px-4 rounded text-center hover:bg-indigo-700 transition-colors font-bold"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log('Opening directions in Google Maps');
-                      }}
+                      className="map-direction-link"
                     >
                       📍 Get Directions in Google Maps
                     </a>
@@ -258,8 +236,8 @@ const Maps = () => {
                   suppressMarkers: true,
                   polylineOptions: {
                     strokeColor: '#4F46E5',
-                    strokeWeight: 5,
-                  },
+                    strokeWeight: 5
+                  }
                 }}
               />
             )}
@@ -267,9 +245,16 @@ const Maps = () => {
         </LoadScript>
       </div>
 
-      <div className="p-2 text-center text-sm text-gray-600 bg-gray-100">
-        <p>🔴 Hospital | 🟢 Pharmacy | 🔵 Your Location</p>
-      </div>
+      <footer className="map-footer">
+        <div className="footer-icons">
+          <span className="legend hospital">🔴 Hospital</span>
+          <span className="legend pharmacy">🟢 Pharmacy</span>
+          <span className="legend user">🔵 You</span>
+        </div>
+        <p className="footer-text">HealthEase &copy; 2025 — All rights reserved</p>
+      </footer>
+
+
     </div>
   );
 };

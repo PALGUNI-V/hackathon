@@ -28,7 +28,7 @@ export default function HomePage() {
         {/* Desktop nav */}
         <div className="nav-links desktop-nav">
           <Link to="/">HOME</Link>
-          <a href="#askai">ASKAI</a>
+          <Link to="/askai">ASKAI</Link>
           <Link to="/maps">MAPS</Link>
           <a href="#appointment">APPOINTMENT</a>
         </div>
