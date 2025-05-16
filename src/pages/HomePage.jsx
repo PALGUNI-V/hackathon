@@ -31,14 +31,15 @@ export default function HomePage() {
           <Link to="/askai">ASKAI</Link>
           <Link to="/maps">MAPS</Link>
           <a href="#appointment">APPOINTMENT</a>
+          
         </div>
 
         {/* Right section */}
         <div className="auth-right" ref={navRef}>
-          <div className="auth-buttons">
+          {/* <div className="auth-buttons">
             <button className="login-btn">LOGIN</button>
             <button className="signup-btn">SIGN UP</button>
-          </div>
+          </div> */}
 
           <div className="hamburger" onClick={() => setIsMenuOpen(!isMenuOpen)}>
             <FaBars />

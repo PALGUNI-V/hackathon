@@ -348,7 +348,7 @@ body, html, #root {
   .desktop-nav {
     display: flex;
     gap: 32px;
-    justify-content: center;
+    justify-content: right;
     /* align-items: center; */
     font-family: 'Mulish', sans-serif;
     font-weight: 800;
@@ -358,12 +358,12 @@ body, html, #root {
   .hamburger {
     display: none;
   }
-
-  .auth-right {
+ 
+  /* .auth-right {
     display: flex;
     gap: 16px;
     align-items: center;
-  }
+  } */
 
   .auth-buttons {
     display: flex;
